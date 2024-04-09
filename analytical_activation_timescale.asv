@@ -1,0 +1,88 @@
+
+% activation model
+
+clear
+close all
+clc
+
+%% Kohler parameters
+
+
+A = (1.4*1e-3); % in micro meters
+B = (3.5*1e-4);
+
+k = 1.28; %non dim
+
+RHeq = @(x) 1 + A./x - B./(x.^(3));
+
+
+%% Critical radius and supersaturation
+
+r2_crit = 3*B/A;
+
+s_crit = RHeq(sqrt(r2_crit));
+
+rm = B/A;
+
+%% model parameters (micrometers)
+
+
+N = 1e-9; % 1e-9 per micon^3 = 1e3 per cm3
+
+A1 = 6*1e-10;
+A2 = 3.5*1e20;
+A3 = 50;
+rhow = 1e-15;
+
+alpha2 = 4*pi*rhow*A2*A3*N;
+D = A3;
+
+
+%% Noise intensity and vertical velocity
+
+w = 0.196*1e6; % micron per second
+s = 0.4*w; 
+
+%% Seq
+
+Seq = A1*w/(alpha2*sqrt(rm));
+
+
+disp(strcat('Critical S:',num2str(100*(s_crit-1))))
+disp(strcat('Equilibrium S:',num2str(100*Seq)))
+disp(strcat('Critical r2:',num2str(r2_crit)))
+disp(strcat('Steady r2:',num2str(rm)))
+
+epsilon = A1*s/(alpha2*sqrt(rm));
+
+
+%% vector field
+
+v = @(x) 2*D*(Seq + 1 - RHeq(sqrt(x)));
+V = @(x) 2*D*(Seq*x - 2*A*sqrt(x) - 2*B*x.^(-1/2));
+
+%%
+
+x = [0.001:1e-6:10];
+
+vx = v(x);
+Vx = (x(2)-x(1))*cumsum(vx);
+
+eq1 = fzero(v,0.6);
+
+
+%% Check potential is well calculated
+
+figure
+plot(x,-V(x),'LineWidth',2)
+hold on
+plot(x,-Vx+2.222893283326720,'--','LineWidth',2)
+plot(r2_crit,-V(r2_crit),'.','Color','red','MarkerSize',20)
+plot(eq1,-V(eq1),'.','Color','magenta','MarkerSize',20)
+
+axis([0.5 1.1 0.243 0.2432])
+
+%%
+
+tact = @(s) 2*pi
+
