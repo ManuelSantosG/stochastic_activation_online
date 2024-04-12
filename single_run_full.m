@@ -22,12 +22,12 @@ r2_crit = 3*B/A;
 
 s_crit = RHeq(sqrt(r2_crit));
 
-rm = 0.9*r2_crit;
+rm = 0.66*r2_crit;
 
 %% model parameters (micrometers)
 
 
-N = 1e-9; % 1e-9 per micon^3 = 1e3 per cm3
+N = 2*1e-9; % 1e-9 per micon^3 = 1e3 per cm3
 
 A1 = 6*1e-10;
 A2 = 3.5*1e20;
@@ -41,7 +41,7 @@ D = A3;
 %% Noise intensity and vertical velocity
 
 %w = 0.34207*1e6; % micron per second
-w = 0.32*1e6; % micron per second
+w = 0.5*1e6; % micron per second
 s = 0.4*w;
 
 %% Seq
@@ -59,28 +59,48 @@ disp(strcat('SS timescale:',num2str(100*A1*w)))
 epsilon = A1*s/(alpha2*sqrt(rm));
 
 
+%% equilibrium distribution for RR (reduced yet multiplicative equation)
 
+gamma1 = 2*D*A1*w/(alpha2);
+gamma2 = 2*D*A;
+gamma3 = 2*D*B;
+gamma4 = 2*D*A1*s/alpha2;
+
+
+rho = @(x) x.*exp(2*( (2/3)*(gamma1-gamma2)*sqrt(x.^3)/(gamma4^2) + 2*(gamma3/(gamma4*gamma4))*x.^(1/2)     ));
+rhos = @(x) x.*exp(2*( (2/3)*(gamma1-gamma2)*sqrt(x.^3)/(gamma4^2) + 2*(gamma3/(gamma4*gamma4))*x.^(1/2)  - 0.25*log(x)   ));
 
 %% Initialise solution
 
 dt = 1e-2;
-tmax = 1e4;
+tmax = 1e5;
 n = floor(tmax/dt);
 
 R = zeros(1,n);
 RR = zeros(1,n);
+RRs = zeros(1,n);
 RRR = zeros(1,n);
+RRRR = zeros(1,n);
 S = zeros(1,n);
+SS = zeros(1,n);
 R(1) = B/A;
 RR(1) = B/A;
+RRs(1) = B/A;
 RRR(1) = B/A;
+RRRR(1) = B/A;
+
+NOISE = randn(1,n);
     
 for i=1:n-1
-    S(i+1) = S(i) - dt*alpha2*S(i)*sqrt(R(i)) + dt*A1*w + sqrt(dt)*A1*s*randn();
+    S(i+1) = S(i) - dt*alpha2*S(i)*sqrt(R(i)) + dt*A1*w + sqrt(dt)*A1*s*NOISE(i);
     R(i+1) = max(0,R(i) + dt*2*A3*(S(i)+1-RHeq(sqrt(R(i)),k)));
-    RR(i+1) = max(0,RR(i) + dt*2*A3*(A1*w/(alpha2*sqrt(RR(i)))+1-RHeq(sqrt(RR(i)),k))+sqrt(dt)*2*A3*(A1*s/(alpha2*sqrt(RR(i))))*randn()  );
-    RRR(i+1) = max(0,RRR(i) + dt*2*A3*(Seq+1-RHeq(sqrt(RRR(i)),k))+sqrt(dt)*2*A3*(A1*s/(alpha2*sqrt(rm)))*randn()  );
+    RR(i+1) = max(0,RR(i) + dt*2*A3*(A1*w/(alpha2*sqrt(RR(i)))+1-RHeq(sqrt(RR(i)),k))+sqrt(dt)*2*A3*(A1*s/(alpha2*sqrt(RR(i))))*NOISE(i) );
+    RRs(i+1) = max(0,RRs(i) + dt*2*A3*(A1*w/(alpha2*sqrt(RRs(i)))+1-RHeq(sqrt(RRs(i)),k) - (100*0.25*(A1*A1*s*s)/(alpha2*alpha2))*(RRs(i))^(-2)) + sqrt(dt)*2*A3*(A1*s/(alpha2*sqrt(RRs(i))))*NOISE(i) );
+    RRR(i+1) = max(0,RRR(i) + dt*2*A3*(Seq+1-RHeq(sqrt(RRR(i)),k))+sqrt(dt)*2*A3*(A1*s/(alpha2*sqrt(rm)))*NOISE(i) );
+    SS(i+1) = SS(i) - dt*alpha2*SS(i)*sqrt(rm) + dt*A1*w + sqrt(dt)*A1*s*NOISE(i);
+    RRRR(i+1) = max(0,RRRR(i) + dt*2*A3*(SS(i)+1-RHeq(sqrt(RRRR(i)),k)));
 end
+
 
 %% plot
 
@@ -92,3 +112,84 @@ plot(RRR,'LineWidth',2)
 plot(r2_crit*ones(size(R)),'black')
 ylim([0,1.2])
 
+
+%% 
+
+[pdf_R,bins_R] = hist(R(1e3:end),500);
+[pdf_RR,bins_RR] = hist(RR(1e3:end),500);
+[pdf_RRs,bins_RRs] = hist(RRs(1e3:end),500);
+[pdf_RRR,bins_RRR] = hist(RRR(1e3:end),500);
+[pdf_RRRR,bins_RRRR] = hist(RRRR(1e3:end),500);
+
+dbins_R = bins_R(2)-bins_R(1);
+dbins_RR = bins_RR(2)-bins_RR(1);
+dbins_RRs = bins_RRs(2)-bins_RRs(1);
+dbins_RRR = bins_RRR(2)-bins_RRR(1);
+dbins_RRRR = bins_RRRR(2)-bins_RRRR(1);
+normalization_factor_R = dbins_R*sum(pdf_R);
+normalization_factor_RR = dbins_RR*sum(pdf_RR);
+normalization_factor_RRs = dbins_RRs*sum(pdf_RRs);
+normalization_factor_RRR = dbins_RRR*sum(pdf_RRR);
+normalization_factor_RRRR = dbins_RRRR*sum(pdf_RRRR);
+
+x = bins_RR;
+analytical_pdf = rho(x);
+analytical_pdf_strat = rhos(x);
+
+analytical_normalization_factor = (x(2)-x(1))*sum(analytical_pdf);
+analytical_normalization_factor_strat = (x(2)-x(1))*sum(analytical_pdf_strat);
+
+figure
+subplot(1,2,1)
+hold on
+plot(bins_R,pdf_RR/normalization_factor_R,'linewidth',1,'color','black')
+plot(bins_RR,pdf_RR/normalization_factor_RR,'linewidth',1,'color','blue')
+plot(bins_RRs,pdf_RRs/normalization_factor_RRs,'linewidth',1,'color','magenta')
+plot(bins_RRRR,pdf_RRRR/normalization_factor_RRRR,'linewidth',1,'color',[0.25 0.80 0.54])
+plot(bins_RRR,pdf_RRR/normalization_factor_RRR,'linewidth',1,'color','yellow')
+plot(x,analytical_pdf/analytical_normalization_factor,'linestyle','--','linewidth',2,'color','red')
+plot(x,analytical_pdf_strat/analytical_normalization_factor_strat,'linestyle','--','linewidth',2,'color','green')
+%legend('Full 2D model','Homogenized numerical','Quasi-steady numerical','Homogenized analytical','location','northwest')
+legend('Full 2D model','Homogenized numerical','Homogenized numerical Strat.','2D Quasi-steady','Reduced quasi-steady','Homogenized analytical','Homogenized analytical Strat.','location','northeast')
+axis square
+xlim([0.2 1])
+box on
+set(gca, 'fontsize', 20)
+xlabel('Squared radius $r^2$ $(\mu \mathrm{m}^2)$','interpreter','latex')
+ylabel('Normalized frequency','Interpreter','latex')
+
+subplot(1,2,2)
+semilogy(bins_R,pdf_RR/normalization_factor_R,'linewidth',1,'color','black')
+hold on
+semilogy(bins_RR,pdf_RR/normalization_factor_RR,'linewidth',1,'color','blue')
+semilogy(bins_RRs,pdf_RRs/normalization_factor_RRs,'linewidth',1,'color','magenta')
+semilogy(bins_RRRR,pdf_RRRR/normalization_factor_RRRR,'linewidth',1,'color',[0.25 0.80 0.54])
+semilogy(bins_RRR,pdf_RRR/normalization_factor_RRR,'linewidth',1,'color','yellow')
+semilogy(x,analytical_pdf/analytical_normalization_factor,'linestyle','--','linewidth',2,'color','red')
+semilogy(x,analytical_pdf_strat/analytical_normalization_factor_strat,'linestyle','--','linewidth',2,'color','green')
+%legend('Full 2D model','Homogenized numerical','Quasi-steady numerical','Homogenized analytical','location','northwest')
+legend('Full 2D model','Homogenized numerical','Homogenized numerical Strat.','2D Quasi-steady','Reduced quasi-steady','Homogenized analytical','Homogenized analytical Strat.','location','northeast')
+axis square
+box on
+set(gca, 'fontsize', 20)
+xlabel('Squared radius $r^2$ $(\mu \mathrm{m}^2)$','interpreter','latex')
+
+
+
+
+
+% %%
+% sto = [R;100*S]';
+% 
+% 
+% 
+% gridx1 = min(sto(:,1)):0.03:max(sto(:,1));
+%         gridx2 = min(sto(:,2)):0.03:max(sto(:,2));
+%         [x1, x2] = meshgrid(gridx1, gridx2);
+%         x1 = x1(:);
+%         x2 = x2(:);
+%   
+% 
+% xi = [x1, x2];
+%         ksdensity(sto, xi)
+% 

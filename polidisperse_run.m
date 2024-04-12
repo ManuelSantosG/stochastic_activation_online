@@ -1,0 +1,172 @@
+
+% activation model
+
+clear
+close all
+clc
+
+%% Kohler parameters
+
+
+A = (1.4*1e-3); % in micro meters
+%B = (3.5*1e-4);
+
+kappa_parameter = 1.28; %non dim
+
+RHeq = @(x,rd) 1 + A./x - (kappa_parameter*rd^3)./(x.^(3));
+
+
+%% Critical radius and supersaturation
+
+r2_crit = 3*(kappa_parameter*0.065^3)/A;
+
+s_crit = RHeq(sqrt(r2_crit),0.065);
+
+rm = 0.9*r2_crit;
+
+%% model parameters (micrometers)
+
+
+N = 1e-9; % 1e-9 per micon^3 = 1e3 per cm3
+
+A1 = 6*1e-10;
+A2 = 3.5*1e20;
+A3 = 50;
+rhow = 1e-15;
+
+alpha2 = 4*pi*rhow*A2*A3*N;
+D = A3;
+
+
+%% Noise intensity and vertical velocity
+
+%w = 0.34207*1e6; % micron per second
+w = 0.3*1e6; % micron per second
+s = 0.15*w;
+
+%% Mean B parameter
+
+rd_mean = 0.065;
+rd_var = 0.01;
+B = kappa_parameter*rd_mean^3;
+
+%% Integration paramters
+
+dt = 1e-2;
+tmax = 5*1e2;
+n = floor(tmax/dt);
+
+%% Initialise mean field solution
+
+R = zeros(1,n);
+S = zeros(1,n);
+rd_mean = 0.065;
+B = kappa_parameter*rd_mean^3;
+R(1) = B/A;
+
+NOISE = randn(1,n);
+    
+for i=1:n-1
+    S(i+1) = S(i) - dt*alpha2*S(i)*sqrt(R(i)) + dt*A1*w + sqrt(dt)*A1*s*NOISE(i);
+    R(i+1) = max(0,R(i) + dt*2*A3*(S(i)+1-RHeq(sqrt(R(i)),rd_mean)));
+end
+
+%% Initialise population of particles
+
+numparts = 5*1e2;
+rd_pop = rd_mean + rd_var*rd_mean*randn(1,numparts);
+
+SS = zeros(1,n);
+RR = zeros(numparts,n);
+
+RR(:,1) = (kappa_parameter*rd_pop.^3)/A;
+
+for i=1:n-1
+    SS(i+1) = SS(i) - dt*alpha2*SS(i)*mean(sqrt(RR(:,i)),1) + dt*A1*w + sqrt(dt)*A1*s*NOISE(i);
+for K = 1:numparts
+    RR(K,i+1) = max(0,RR(K,i) + dt*2*A3*(SS(i)+1-RHeq(sqrt(RR(K,i)),rd_pop(K))));
+end
+100*i/n
+end
+
+polydisperse_total_activation = length(find(RR(:,end)>r2_crit))/numparts
+
+%%
+
+mR = zeros(1,n);
+for i=1:n
+
+mR(i) = mean(RR(:,i));
+
+end
+
+
+%% plot
+
+figure
+subplot(3,4,[1,2,5,6])
+
+[H,Bins] = hist(rd_pop,30);
+plot(Bins,H,'linewidth',2,'color','black')
+hold on
+%plot((3*(kappa_parameter*rd_mean^3)/A)*ones(1,100),linspace(0,50,100))
+set(gca, 'fontsize', 22)
+axis square 
+box on
+ylabel('counts','Interpreter','latex')
+xlabel(['Dry radius $(\mu \mathrm{m})$'],'Interpreter','latex')
+
+subplot(3,4,[3,4,7,8])
+hold on
+for i=1:min(100, numparts)
+plot(dt*[1:n],RR(i,:),'LineWidth',1.5,'color',[0.5 0.5 0.5])
+end
+for i=1:min(100, numparts)
+plot(dt*[1:n],(3*(kappa_parameter*rd_pop(i)^3)/A)*ones(1,n),'color',[1 0.7 0.7],'LineWidth',2)    
+end
+plot(dt*[1:n],(3*(kappa_parameter*rd_mean^3)/A)*ones(1,n),'color','red','LineWidth',2)
+plot(dt*[1:n],R,'LineWidth',5,'color','black')
+plot(dt*[1:n],mR,'LineWidth',5,'color','green','LineStyle','--')
+axis([0 tmax 0 2.5])
+set(gca, 'fontsize', 22)
+axis square 
+box on
+ylabel('Squared radius $(\mu \mathrm{m}^2)$','Interpreter','latex')
+xlabel('time $(s)$','Interpreter','latex')
+
+
+
+[H1,Bins1] = hist(RR(:,1e2),50);
+[H2,Bins2] = hist(RR(:,5*1e3),50);
+[H3,Bins3] = hist(RR(:,1e4),50);
+[H4,Bins4] = hist(RR(:,2*1e4),50);
+
+subplot(3,4,9)
+semilogy(Bins1,H1,'linewidth',2,'Color','black')
+legend('$t = 1 s$','interpreter','latex')
+set(gca, 'fontsize', 20)
+axis square
+
+
+subplot(3,4,10)
+semilogy(Bins2,H2,'linewidth',2,'Color','black')
+legend('$t = 50 s$','interpreter','latex')
+set(gca, 'fontsize', 20)
+axis square
+
+
+subplot(3,4,11)
+semilogy(Bins3,H3,'linewidth',2,'Color','black')
+legend('$t = 100 s$','interpreter','latex')
+set(gca, 'fontsize', 20)
+axis square
+
+
+subplot(3,4,12)
+semilogy(Bins4,H4,'linewidth',2,'Color','black')
+legend('$t = 200 s$','interpreter','latex')
+set(gca, 'fontsize', 20)
+axis square
+
+
+
